@@ -1,9 +1,9 @@
 FROM gradle:8.6-jdk17 AS build
 
-COPY --no-cache . /app
+COPY . /app
 WORKDIR /app
 
-# 빌드
+# Gradle 빌드
 RUN gradle build --no-daemon
 
 # 실행용 이미지
