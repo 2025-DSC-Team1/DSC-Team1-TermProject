@@ -8,6 +8,6 @@ public class PageController {
 
     @GetMapping("/")
     public String redirectToEditor() {
-        return "redirect:/editor.html"; // static/editor.html 로 이동
+        return "redirect:/WebSocketTest.html"; // static/WebSocketTest.html 로 이동
     }
 }
