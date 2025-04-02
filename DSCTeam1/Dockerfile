@@ -1,7 +1,12 @@
+FROM gradle:8.6-jdk17 AS build
+
+COPY --no-cache . /app
+WORKDIR /app
+
+# 빌드
+RUN gradle build --no-daemon
+
+# 실행용 이미지
 FROM openjdk:17-jdk-slim
-
-# Gradle로 빌드된 JAR 복사
-COPY build/libs/DSCTeam1-0.0.1-SNAPSHOT.jar app.jar
-
-# Spring Boot 실행
+COPY --from=build /app/build/libs/DSCTeam1-0.0.1-SNAPSHOT.jar app.jar
 ENTRYPOINT ["java", "-jar", "/app.jar"]
