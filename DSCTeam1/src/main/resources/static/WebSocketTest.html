@@ -1,37 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>공유 텍스트 에디터</title>
+    <title>DSC 1팀 협업 텍스트 편집기</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
             max-width: 900px;
             margin: 0 auto;
         }
-        .editor-container {
-            margin-top: 20px;
-            border: 1px solid #ccc;
-            padding: 10px;
+        h1 {
+            color: #333;
+            text-align: center;
         }
         #editor {
             width: 100%;
             height: 300px;
-            border: 1px solid #ddd;
+            border: 1px solid #ccc;
             padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap; /* 줄바꿈을 위해 추가 */
+            box-sizing: border-box;
             font-size: 16px;
             line-height: 1.5;
-            resize: vertical;
+            margin-bottom: 20px;
         }
-        .connection-status {
-            margin-bottom: 10px;
-            padding: 5px;
+        .button-group {
+            margin: 10px 0;
+            text-align: center;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
             border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
         }
         .connected {
             background-color: #d4edda;
@@ -45,71 +60,49 @@
             background-color: #fff3cd;
             color: #856404;
         }
-        .button-group {
-            margin: 10px 0;
-        }
-        button {
-            padding: 8px 12px;
-            margin-right: 5px;
-            cursor: pointer;
-        }
         #log {
-            white-space: pre-wrap;
             border: 1px solid #ccc;
             padding: 10px;
-            height: 200px;
+            height: 150px;
             overflow-y: scroll;
-            margin-top: 20px;
             font-family: monospace;
             font-size: 14px;
-        }
-        .user-info {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #555;
+            white-space: pre-wrap;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>실시간 공유 텍스트 에디터</h1>
+<h1>협업 텍스트 편집기</h1>
 
-    <div class="button-group">
-        <button onclick="connect()">연결</button>
-        <button onclick="disconnect()">연결 해제</button>
-    </div>
+<div class="button-group">
+    <button onclick="connect()">연결</button>
+    <button onclick="disconnect()">연결 해제</button>
+</div>
 
-    <div id="status" class="connection-status disconnected">연결 상태: 연결 안됨</div>
+<div id="status" class="disconnected">연결 상태: 연결 안됨</div>
 
-    <div class="editor-container">
-        <h3>공유 텍스트 편집</h3>
-        <textarea id="editor" oninput="handleTextChange(event)" disabled></textarea>
-        <div class="user-info">현재 사용자 ID: <span id="user-id">연결되지 않음</span></div>
-    </div>
+<div id="editor" contenteditable="true"></div>
 
-    <div id="log">
-        <strong>📨 메시지 로그:</strong>
-    </div>
+<div id="log">
+    <strong>📨 메시지 로그:</strong>
 </div>
 
 <script>
     let socket;
     let editorElement = document.getElementById("editor");
     let statusElement = document.getElementById("status");
-    let userIdElement = document.getElementById("user-id");
-
-    // 에디터의 이전 상태를 저장하는 변수
-    let lastEditorState = "";
     let isLocalChange = false;
+    let lastContent = "";
 
     function logMessage(message) {
         const logDiv = document.getElementById("log");
-        logDiv.innerText += message + '\n';
+        logDiv.innerText += "\n" + message;
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
     function updateStatus(status, message) {
-        statusElement.className = "connection-status " + status;
+        statusElement.className = status;
         statusElement.innerText = "연결 상태: " + message;
     }
 
@@ -125,6 +118,7 @@
         }
 
         updateStatus("connecting", "연결 중...");
+        editorElement.contentEditable = "false";
 
         // WebSocket 프로토콜 자동 선택 (http->ws, https->wss)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -135,7 +129,7 @@
         socket.onopen = () => {
             logMessage("✅ 서버에 연결됨");
             updateStatus("connected", "연결됨");
-            editorElement.disabled = false;
+            editorElement.contentEditable = "true";
 
             // 서버에 초기 동기화 요청
             requestSyncFromServer();
@@ -148,8 +142,8 @@
                 if (data.type === "init") {
                     // 초기 텍스트 설정
                     isLocalChange = true;
-                    editorElement.value = data.text;
-                    lastEditorState = data.text;
+                    editorElement.textContent = data.text;
+                    lastContent = data.text;
                     isLocalChange = false;
                     logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
                 }
@@ -157,8 +151,8 @@
                     // 다른 클라이언트의 변경사항 적용
                     if (!isLocalChange) {
                         isLocalChange = true;
-                        editorElement.value = data.fullText;
-                        lastEditorState = data.fullText;
+                        editorElement.textContent = data.fullText;
+                        lastContent = data.fullText;
                         isLocalChange = false;
                         logMessage(`📩 다른 클라이언트의 텍스트 변경이 적용되었습니다: ${data.type}`);
                     }
@@ -166,14 +160,6 @@
                 else {
                     // 일반 메시지
                     logMessage("📩 " + e.data);
-
-                    // 연결된 클라이언트 ID 확인
-                    if (e.data.includes("client connected:")) {
-                        const id = e.data.split("client connected: ")[1];
-                        if (id === socket.id) {
-                            userIdElement.innerText = id;
-                        }
-                    }
                 }
             } catch (error) {
                 // JSON이 아닌 일반 메시지 처리
@@ -184,8 +170,7 @@
         socket.onclose = () => {
             logMessage("❌ 연결 종료");
             updateStatus("disconnected", "연결 안됨");
-            editorElement.disabled = true;
-            userIdElement.innerText = "연결되지 않음";
+            editorElement.contentEditable = "false";
             socket = null;
         };
 
@@ -214,87 +199,63 @@
     }
 
     // 텍스트 변경 감지 및 서버로 전송
-    function handleTextChange(event) {
-        if (isLocalChange) return; // 서버에서 온 변경사항은 다시 서버로 보내지 않음
+    editorElement.addEventListener('input', (event) => {
+        if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            const currentText = event.target.value;
-            const previousText = lastEditorState;
+        const currentContent = editorElement.textContent;
 
-            // 텍스트 변경 분석
-            if (currentText.length > previousText.length) {
-                // 텍스트 추가 또는 편집
+        // 전체 내용이 변경된 경우 - 편집 메시지 전송
+        const editMessage = {
+            type: "edit",
+            start: 0,
+            end: lastContent.length,
+            text: currentContent
+        };
 
-                // 간단한 타이핑 감지 (끝에 추가)
-                if (currentText.startsWith(previousText)) {
-                    const addedText = currentText.substring(previousText.length);
-                    const position = previousText.length;
+        socket.send(JSON.stringify(editMessage));
+        logMessage("📤 텍스트 변경 전송");
 
-                    const addMessage = {
-                        type: "add",
-                        position: position,
-                        text: addedText
-                    };
-                    socket.send(JSON.stringify(addMessage));
-                    logMessage(`📤 텍스트 추가: "${addedText}" (위치: ${position})`);
-                }
-                // 중간에 삽입 또는 편집 (복잡한 경우)
-                else {
-                    const editMessage = {
-                        type: "edit",
-                        start: 0,
-                        end: previousText.length,
-                        text: currentText
-                    };
-                    socket.send(JSON.stringify(editMessage));
-                    logMessage("📤 텍스트 전체 편집");
-                }
-            }
-            else if (currentText.length < previousText.length) {
-                // 텍스트 삭제
+        lastContent = currentContent;
+    });
 
-                // 간단한 백스페이스 감지 (끝에서 삭제)
-                if (previousText.startsWith(currentText)) {
-                    const start = currentText.length;
-                    const end = previousText.length;
+    // 엔터 키를 눌렀을 때 줄바꿈 처리
+    editorElement.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault(); // 기본 동작 방지
 
-                    const deleteMessage = {
-                        type: "delete",
-                        start: start,
-                        end: end
-                    };
-                    socket.send(JSON.stringify(deleteMessage));
-                    logMessage(`📤 텍스트 삭제: 위치 ${start}~${end}`);
-                }
-                // 중간에서 삭제 (복잡한 경우)
-                else {
-                    const editMessage = {
-                        type: "edit",
-                        start: 0,
-                        end: previousText.length,
-                        text: currentText
-                    };
-                    socket.send(JSON.stringify(editMessage));
-                    logMessage("📤 텍스트 전체 편집");
-                }
-            }
-            else if (currentText !== previousText) {
-                // 같은 길이지만 내용이 다른 경우 (붙여넣기 등)
+            // 표준 방식의 줄바꿈 삽입
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            const newLineNode = document.createTextNode('\n');
+            range.deleteContents();
+            range.insertNode(newLineNode);
+
+            // 커서 위치 조정
+            range.setStartAfter(newLineNode);
+            range.setEndAfter(newLineNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            // 변경 내용 서버로 전송
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const currentContent = editorElement.textContent;
                 const editMessage = {
                     type: "edit",
                     start: 0,
-                    end: previousText.length,
-                    text: currentText
+                    end: lastContent.length,
+                    text: currentContent
                 };
                 socket.send(JSON.stringify(editMessage));
-                logMessage("📤 텍스트 전체 편집");
+                lastContent = currentContent;
             }
-
-            lastEditorState = currentText;
-        } else {
-            logMessage("⚠️ 연결이 열려있지 않습니다.");
         }
-    }
+    });
+
+    // 페이지 로드 시 연결 버튼 강조
+    window.onload = function() {
+        const connectButton = document.querySelector('.button-group button:first-child');
+        connectButton.focus();
+    };
 </script>
 </body>
 </html>
