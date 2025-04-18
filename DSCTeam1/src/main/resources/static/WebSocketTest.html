@@ -2,29 +2,115 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>WebSocket Test</title>
+    <title>공유 텍스트 에디터</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .editor-container {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        #editor {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-size: 16px;
+            line-height: 1.5;
+            resize: vertical;
+        }
+        .connection-status {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .button-group {
+            margin: 10px 0;
+        }
+        button {
+            padding: 8px 12px;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+        #log {
+            white-space: pre-wrap;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 200px;
+            overflow-y: scroll;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .user-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
 </head>
 <body>
-<h2>WebSocket 테스트</h2>
+<div class="container">
+    <h1>실시간 공유 텍스트 에디터</h1>
 
-<button onclick="connect()">Connect</button>
-<button onclick="send()">Send</button>
-<button onclick="disconnect()">Disconnect</button>
+    <div class="button-group">
+        <button onclick="connect()">연결</button>
+        <button onclick="disconnect()">연결 해제</button>
+    </div>
 
-<hr>
+    <div id="status" class="connection-status disconnected">연결 상태: 연결 안됨</div>
 
-<!-- ✅ 메시지 출력할 공간 -->
-<div id="log" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: scroll;">
-    <strong>📨 메시지 로그:</strong>\n
+    <div class="editor-container">
+        <h3>공유 텍스트 편집</h3>
+        <textarea id="editor" oninput="handleTextChange(event)" disabled></textarea>
+        <div class="user-info">현재 사용자 ID: <span id="user-id">연결되지 않음</span></div>
+    </div>
+
+    <div id="log">
+        <strong>📨 메시지 로그:</strong>
+    </div>
 </div>
 
 <script>
     let socket;
+    let editorElement = document.getElementById("editor");
+    let statusElement = document.getElementById("status");
+    let userIdElement = document.getElementById("user-id");
+
+    // 에디터의 이전 상태를 저장하는 변수
+    let lastEditorState = "";
+    let isLocalChange = false;
 
     function logMessage(message) {
         const logDiv = document.getElementById("log");
         logDiv.innerText += message + '\n';
         logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function updateStatus(status, message) {
+        statusElement.className = "connection-status " + status;
+        statusElement.innerText = "연결 상태: " + message;
     }
 
     function connect() {
@@ -38,33 +124,75 @@
             return;
         }
 
-        socket = new WebSocket(`wss://${location.host}/ws`);
+        updateStatus("connecting", "연결 중...");
+
+        // WebSocket 프로토콜 자동 선택 (http->ws, https->wss)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            logMessage("✅ 연결됨");
+            logMessage("✅ 서버에 연결됨");
+            updateStatus("connected", "연결됨");
+            editorElement.disabled = false;
+
+            // 서버에 초기 동기화 요청
+            requestSyncFromServer();
         };
 
         socket.onmessage = (e) => {
-            logMessage("📩 " + e.data);
+            try {
+                const data = JSON.parse(e.data);
+
+                if (data.type === "init") {
+                    // 초기 텍스트 설정
+                    isLocalChange = true;
+                    editorElement.value = data.text;
+                    lastEditorState = data.text;
+                    isLocalChange = false;
+                    logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
+                }
+                else if (data.type === "add" || data.type === "delete" || data.type === "edit") {
+                    // 다른 클라이언트의 변경사항 적용
+                    if (!isLocalChange) {
+                        isLocalChange = true;
+                        editorElement.value = data.fullText;
+                        lastEditorState = data.fullText;
+                        isLocalChange = false;
+                        logMessage(`📩 다른 클라이언트의 텍스트 변경이 적용되었습니다: ${data.type}`);
+                    }
+                }
+                else {
+                    // 일반 메시지
+                    logMessage("📩 " + e.data);
+
+                    // 연결된 클라이언트 ID 확인
+                    if (e.data.includes("client connected:")) {
+                        const id = e.data.split("client connected: ")[1];
+                        if (id === socket.id) {
+                            userIdElement.innerText = id;
+                        }
+                    }
+                }
+            } catch (error) {
+                // JSON이 아닌 일반 메시지 처리
+                logMessage("📩 " + e.data);
+            }
         };
 
         socket.onclose = () => {
             logMessage("❌ 연결 종료");
-            socket = null; // 꼭 초기화
+            updateStatus("disconnected", "연결 안됨");
+            editorElement.disabled = true;
+            userIdElement.innerText = "연결되지 않음";
+            socket = null;
         };
 
         socket.onerror = (e) => {
             logMessage("🚨 에러 발생: " + e.message);
+            updateStatus("disconnected", "오류 발생");
         };
-    }
-
-    function send() {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send("클라이언트에서 보낸 메시지");
-            logMessage("📤 클라이언트 → 서버: 클라이언트에서 보낸 메시지");
-        } else {
-            logMessage("⚠️ 연결이 열려있지 않습니다.");
-        }
     }
 
     function disconnect() {
@@ -72,6 +200,99 @@
             socket.close();
         } else {
             logMessage("⚠️ 연결이 이미 닫혀있습니다.");
+        }
+    }
+
+    function requestSyncFromServer() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            const syncRequest = {
+                type: "sync"
+            };
+            socket.send(JSON.stringify(syncRequest));
+            logMessage("📤 서버에 텍스트 동기화 요청");
+        }
+    }
+
+    // 텍스트 변경 감지 및 서버로 전송
+    function handleTextChange(event) {
+        if (isLocalChange) return; // 서버에서 온 변경사항은 다시 서버로 보내지 않음
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            const currentText = event.target.value;
+            const previousText = lastEditorState;
+
+            // 텍스트 변경 분석
+            if (currentText.length > previousText.length) {
+                // 텍스트 추가 또는 편집
+
+                // 간단한 타이핑 감지 (끝에 추가)
+                if (currentText.startsWith(previousText)) {
+                    const addedText = currentText.substring(previousText.length);
+                    const position = previousText.length;
+
+                    const addMessage = {
+                        type: "add",
+                        position: position,
+                        text: addedText
+                    };
+                    socket.send(JSON.stringify(addMessage));
+                    logMessage(`📤 텍스트 추가: "${addedText}" (위치: ${position})`);
+                }
+                // 중간에 삽입 또는 편집 (복잡한 경우)
+                else {
+                    const editMessage = {
+                        type: "edit",
+                        start: 0,
+                        end: previousText.length,
+                        text: currentText
+                    };
+                    socket.send(JSON.stringify(editMessage));
+                    logMessage("📤 텍스트 전체 편집");
+                }
+            }
+            else if (currentText.length < previousText.length) {
+                // 텍스트 삭제
+
+                // 간단한 백스페이스 감지 (끝에서 삭제)
+                if (previousText.startsWith(currentText)) {
+                    const start = currentText.length;
+                    const end = previousText.length;
+
+                    const deleteMessage = {
+                        type: "delete",
+                        start: start,
+                        end: end
+                    };
+                    socket.send(JSON.stringify(deleteMessage));
+                    logMessage(`📤 텍스트 삭제: 위치 ${start}~${end}`);
+                }
+                // 중간에서 삭제 (복잡한 경우)
+                else {
+                    const editMessage = {
+                        type: "edit",
+                        start: 0,
+                        end: previousText.length,
+                        text: currentText
+                    };
+                    socket.send(JSON.stringify(editMessage));
+                    logMessage("📤 텍스트 전체 편집");
+                }
+            }
+            else if (currentText !== previousText) {
+                // 같은 길이지만 내용이 다른 경우 (붙여넣기 등)
+                const editMessage = {
+                    type: "edit",
+                    start: 0,
+                    end: previousText.length,
+                    text: currentText
+                };
+                socket.send(JSON.stringify(editMessage));
+                logMessage("📤 텍스트 전체 편집");
+            }
+
+            lastEditorState = currentText;
+        } else {
+            logMessage("⚠️ 연결이 열려있지 않습니다.");
         }
     }
 </script>
