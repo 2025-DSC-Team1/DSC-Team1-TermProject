@@ -15,45 +15,6 @@ function updateStatus(status, message) {
     statusElement.innerText = "연결 상태: " + message;
 }
 
-// 커서 위치 저장 함수
-function saveCaretPosition(containerEl) {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return 0;
-
-    const range = selection.getRangeAt(0);
-    const preSelectionRange = range.cloneRange();
-    preSelectionRange.selectNodeContents(containerEl);
-    preSelectionRange.setEnd(range.startContainer, range.startOffset);
-    return preSelectionRange.toString().length;
-}
-
-// 커서 위치 복원 함수
-function restoreCaretPosition(containerEl, savedPos) {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    let charIndex = 0, nodeStack = [containerEl], node, stop = false;
-
-    while (!stop && (node = nodeStack.pop())) {
-        if (node.nodeType === 3) {
-            const nextCharIndex = charIndex + node.length;
-            if (savedPos >= charIndex && savedPos <= nextCharIndex) {
-                range.setStart(node, savedPos - charIndex);
-                range.collapse(true);
-                stop = true;
-            }
-            charIndex = nextCharIndex;
-        } else {
-            let i = node.childNodes.length;
-            while (i--) {
-                nodeStack.push(node.childNodes[i]);
-            }
-        }
-    }
-
-    selection.removeAllRanges();
-    selection.addRange(range);
-}
-
 function connect() {
     if (socket && socket.readyState === WebSocket.OPEN) {
         logMessage("⚠️ 이미 연결되어 있습니다.");
@@ -90,7 +51,7 @@ function connect() {
             if (data.type === "init") {
                 // 초기 텍스트 설정
                 isLocalChange = true;
-                editorElement.textContent = data.text;
+                editorElement.innerText = data.text;
                 lastContent = data.text;
                 isLocalChange = false;
                 logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
@@ -98,14 +59,10 @@ function connect() {
             else if (data.type === "add" || data.type === "delete" || data.type === "edit") {
                 // 다른 클라이언트의 변경사항 적용
                 if (!isLocalChange) {
-                    const caretPos = saveCaretPosition(editorElement);
-
                     isLocalChange = true;
-                    editorElement.textContent = data.fullText;
+                    editorElement.innerText = data.fullText;
                     lastContent = data.fullText;
                     isLocalChange = false;
-
-                    restoreCaretPosition(editorElement, caretPos);
 
                     logMessage(`📩 다른 클라이언트의 텍스트 변경이 적용되었습니다: ${data.type}`);
                 }
