@@ -153,36 +153,37 @@ function getDiff(oldStr, newStr) {
     }
 }
 
-let isComposing = false;
-
-// 조합 시작 시
-editorElement.addEventListener('compositionstart', () => {
-    isComposing = true;
-});
-
-// 조합 종료 시 (완성된 텍스트 전송)
-editorElement.addEventListener('compositionend', () => {
-    isComposing = false;
-    sendDiff();  // 조합 끝난 최종 문자열만 전송
-});
-
 function sendDiff() {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const current = editorElement.textContent;
     const diffMsg = getDiff(lastContent, current);
     socket.send(JSON.stringify(diffMsg));
     lastContent = current;
 }
 editorElement.addEventListener('input', () => {
-    if (isLocalChange || isComposing || !socket || socket.readyState !== WebSocket.OPEN) return;
+    // 1) 로컬 업데이트나 소켓 비연결 시 무시
+    if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+    // 2) IME 조합 중간 입출력(inputType) 무시
+    //    insertCompositionText: 조합 중간, deleteCompositionText: 조합 중 삭제
+    const inputType = /** @type {InputEvent} */(e).inputType;
+    if (inputType === 'insertCompositionText' || inputType === 'deleteCompositionText') {
+        return;
+    }
+
+    // 3) 디바운스 걸고 최종 Diff 전송
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        sendDiff();
+    }, 150);
+
     clearTimeout(debounceTimer);
 
-    debounceTimer = setTimeout(() => {
-        const current = editorElement.textContent;
-        const diffMsg = getDiff(lastContent, current);
-        socket.send(JSON.stringify(diffMsg));
-        lastContent = current;
-    }, 150);  // 150ms 딜레이
+    //debounceTimer = setTimeout(() => {
+    //    const current = editorElement.textContent;
+    //    const diffMsg = getDiff(lastContent, current);
+    //    socket.send(JSON.stringify(diffMsg));
+    //    lastContent = current;
+    //}, 150);  // 150ms 딜레이
 });
 
 // 엔터 키를 눌렀을 때 줄바꿈 처리
