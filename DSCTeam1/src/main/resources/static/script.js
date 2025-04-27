@@ -15,6 +15,33 @@ function updateStatus(status, message) {
     statusElement.innerText = "연결 상태: " + message;
 }
 
+function applyPatch(data) {
+    isLocalChange = true;
+    const text = editorElement.textContent;
+    let newText;
+
+    switch (data.type) {
+        case "add":
+            newText = text.slice(0, data.position)
+                + data.text
+                + text.slice(data.position);
+            break;
+        case "delete":
+            newText = text.slice(0, data.start)
+                + text.slice(data.end);
+            break;
+        case "edit":
+            newText = text.slice(0, data.start)
+                + data.text
+                + text.slice(data.end);
+            break;
+    }
+
+    editorElement.textContent = newText;
+    lastContent = newText;
+    isLocalChange = false;
+}
+
 function connect() {
     if (socket && socket.readyState === WebSocket.OPEN) {
         logMessage("⚠️ 이미 연결되어 있습니다.");
@@ -51,21 +78,14 @@ function connect() {
             if (data.type === "init") {
                 // 초기 텍스트 설정
                 isLocalChange = true;
-                editorElement.innerText = data.text;
+                editorElement.textContent = data.text;
                 lastContent = data.text;
                 isLocalChange = false;
                 logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
             }
-            else if (data.type === "add" || data.type === "delete" || data.type === "edit") {
-                // 다른 클라이언트의 변경사항 적용
-                if (!isLocalChange) {
-                    isLocalChange = true;
-                    editorElement.innerText = data.fullText;
-                    lastContent = data.fullText;
-                    isLocalChange = false;
-
-                    logMessage(`📩 다른 클라이언트의 텍스트 변경이 적용되었습니다: ${data.type}`);
-                }
+            else if (["add","delete","edit"].includes(data.type)) {
+                applyPatch(data);
+                logMessage(`📩 패치 적용: ${data.type}`);
             }
             else {
                 // 일반 메시지
@@ -109,23 +129,40 @@ function requestSyncFromServer() {
 }
 
 // 텍스트 변경 감지 및 서버로 전송
-editorElement.addEventListener('input', (event) => {
+let debounceTimer;
+
+// 문자열 diff 계산 함수
+function getDiff(oldStr, newStr) {
+    let i = 0, j = 0;
+    const oldLen = oldStr.length, newLen = newStr.length;
+    // 공통 prefix
+    while (i < oldLen && i < newLen && oldStr[i] === newStr[i]) i++;
+    // 공통 suffix
+    while (j < oldLen - i && j < newLen - i
+    && oldStr[oldLen - 1 - j] === newStr[newLen - 1 - j]) j++;
+
+    const removed = oldStr.slice(i, oldLen - j);
+    const added   = newStr.slice(i, newLen - j);
+
+    if (removed && added) {
+        return { type: "edit", start: i, end: oldLen - j, text: added };
+    } else if (removed) {
+        return { type: "delete", start: i, end: oldLen - j };
+    } else {
+        return { type: "add", position: i, text: added };
+    }
+}
+
+editorElement.addEventListener('input', () => {
     if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
+    clearTimeout(debounceTimer);
 
-    const currentContent = editorElement.textContent;
-
-    // 전체 내용이 변경된 경우 - 편집 메시지 전송
-    const editMessage = {
-        type: "edit",
-        start: 0,
-        end: lastContent.length,
-        text: currentContent
-    };
-
-    socket.send(JSON.stringify(editMessage));
-    logMessage("📤 텍스트 변경 전송");
-
-    lastContent = currentContent;
+    debounceTimer = setTimeout(() => {
+        const current = editorElement.textContent;
+        const diffMsg = getDiff(lastContent, current);
+        socket.send(JSON.stringify(diffMsg));
+        lastContent = current;
+    }, 150);  // 150ms 딜레이
 });
 
 // 엔터 키를 눌렀을 때 줄바꿈 처리
