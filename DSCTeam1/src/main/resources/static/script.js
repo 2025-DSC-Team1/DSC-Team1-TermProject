@@ -159,34 +159,20 @@ function sendDiff() {
     socket.send(JSON.stringify(diffMsg));
     lastContent = current;
 }
+
 editorElement.addEventListener('input', () => {
     // 1) 로컬 업데이트나 소켓 비연결 시 무시
     if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
-
-    // 2) IME 조합 중간 입출력(inputType) 무시
-    //    insertCompositionText: 조합 중간, deleteCompositionText: 조합 중 삭제
-    const inputType = /** @type {InputEvent} */(e).inputType;
-    if (inputType === 'insertCompositionText' || inputType === 'deleteCompositionText') {
-        return;
-    }
 
     // 3) 디바운스 걸고 최종 Diff 전송
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         sendDiff();
-    }, 150);
-
-    clearTimeout(debounceTimer);
-
-    //debounceTimer = setTimeout(() => {
-    //    const current = editorElement.textContent;
-    //    const diffMsg = getDiff(lastContent, current);
-    //    socket.send(JSON.stringify(diffMsg));
-    //    lastContent = current;
-    //}, 150);  // 150ms 딜레이
+    }, 250);
 });
 
 // 엔터 키를 눌렀을 때 줄바꿈 처리
+/*
 editorElement.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault(); // 기본 동작 방지
@@ -215,6 +201,21 @@ editorElement.addEventListener('keydown', (event) => {
             };
             socket.send(JSON.stringify(editMessage));
             lastContent = currentContent;
+        }
+    }
+});
+*/
+
+editorElement.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+
+        // 1) 브라우저 기본 줄바꿈 삽입 (<br> 한 번만!)
+        document.execCommand('insertLineBreak');
+
+        // 2) 서버에 change 알리기
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            sendDiff();
         }
     }
 });
