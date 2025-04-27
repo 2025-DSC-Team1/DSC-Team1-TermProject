@@ -116,30 +116,13 @@ public class MySocketHandler extends TextWebSocketHandler {
         }
     }
 
-//    private void broadcastTextChange(JSONObject change) {
-//        // 텍스트 변경 사항을 모든 클라이언트에게 전송
-//        for (WebSocketSession sess : sessions) {
-//            try {
-//                if (sess.isOpen()) {
-//                    // 변경 내용과 현재 전체 텍스트를 함께 보냄
-//                    JSONObject response = new JSONObject(change.toString());
-//                    response.put("fullText", sharedText.toString());
-//                    sess.sendMessage(new TextMessage(response.toString()));
-//                }
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//        }
-//    }
-
     private void broadcastTextChange(JSONObject change, WebSocketSession sender) {
         for (WebSocketSession sess : sessions) {
             if (sess.isOpen() && sess != sender) {
                 try {
-                    JSONObject response = new JSONObject(change.toString());
-                    response.put("fullText", sharedText.toString());
-                    sess.sendMessage(new TextMessage(response.toString()));
+                    sess.sendMessage(new TextMessage(change.toString()));
                 } catch (IOException e) {
+                    // 전송 실패 로그
                     e.printStackTrace();
                 }
             }
