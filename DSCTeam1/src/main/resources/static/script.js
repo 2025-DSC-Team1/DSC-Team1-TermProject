@@ -153,8 +153,28 @@ function getDiff(oldStr, newStr) {
     }
 }
 
+let isComposing = false;
+
+// 조합 시작 시
+editorElement.addEventListener('compositionstart', () => {
+    isComposing = true;
+});
+
+// 조합 종료 시 (완성된 텍스트 전송)
+editorElement.addEventListener('compositionend', () => {
+    isComposing = false;
+    sendDiff();  // 조합 끝난 최종 문자열만 전송
+});
+
+function sendDiff() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const current = editorElement.textContent;
+    const diffMsg = getDiff(lastContent, current);
+    socket.send(JSON.stringify(diffMsg));
+    lastContent = current;
+}
 editorElement.addEventListener('input', () => {
-    if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
+    if (isLocalChange || isComposing || !socket || socket.readyState !== WebSocket.OPEN) return;
     clearTimeout(debounceTimer);
 
     debounceTimer = setTimeout(() => {
