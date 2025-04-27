@@ -15,8 +15,56 @@ function updateStatus(status, message) {
     statusElement.innerText = "연결 상태: " + message;
 }
 
+/**
+ * contentEditable 요소 안에서 현재 커서의 문자 오프셋을 구합니다.
+ */
+function getCaretOffset(container) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return 0;
+    const range = sel.getRangeAt(0);
+    const pre = range.cloneRange();
+    pre.selectNodeContents(container);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString().length;
+}
+
+/**
+ * container 안에서 문자 오프셋 chars 위치에 커서를 놓습니다.
+ */
+function setCaretOffset(container, chars) {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    let nodeStack = [container], node, found = false, charCount = 0;
+
+    while (!found && (node = nodeStack.shift())) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const next = charCount + node.textContent.length;
+            if (chars <= next) {
+                range.setStart(node, chars - charCount);
+                range.collapse(true);
+                found = true;
+                break;
+            } else {
+                charCount = next;
+            }
+        } else {
+            for (let i = 0; i < node.childNodes.length; i++) {
+                nodeStack.push(node.childNodes[i]);
+            }
+        }
+    }
+
+    if (found) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+}
+
+
 function applyPatch(data) {
     isLocalChange = true;
+    // 1) 수정 전 커서 위치 저장
+    const oldOffset = getCaretOffset(editorElement);
     const text = editorElement.textContent;
     let newText;
 
@@ -37,8 +85,12 @@ function applyPatch(data) {
             break;
     }
 
+    // 2) 텍스트 갱신
     editorElement.textContent = newText;
     lastContent = newText;
+    // 3) 커서 복원
+    setCaretOffset(editorElement, oldOffset);
+    // 4) 플래그 해제
     isLocalChange = false;
 }
 
@@ -205,6 +257,7 @@ editorElement.addEventListener('keydown', (event) => {
     }
 });
 */
+
 
 editorElement.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
