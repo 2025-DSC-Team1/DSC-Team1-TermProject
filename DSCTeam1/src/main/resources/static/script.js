@@ -88,9 +88,36 @@ function applyPatch(data) {
     // 2) 텍스트 갱신
     editorElement.textContent = newText;
     lastContent = newText;
-    // 3) 커서 복원
-    setCaretOffset(editorElement, oldOffset);
-    // 4) 플래그 해제
+    // 3) 커서 오프셋 보정
+    let newOffset = oldOffset;
+    if (data.type === "add") {
+        // 앞에 삽입했으면 삽입 길이만큼 커서 이동
+        if (data.position <= oldOffset) {
+            newOffset = oldOffset + data.text.length;
+        }
+    } else if (data.type === "delete") {
+        const delLen = data.end - data.start;
+        if (data.start < oldOffset) {
+            // 커서가 삭제 구간 뒤에 있으면 delLen만큼 당겨지고,
+            // 구간 안에 있으면 구간 시작으로 이동
+            newOffset = Math.max(data.start, oldOffset - delLen);
+        }
+    } else if (data.type === "edit") {
+        const delLen = data.end - data.start;
+        const addLen = data.text.length;
+        if (data.start < oldOffset) {
+            // 뒤에 있으면, 넣은 길이-삭제된 길이 만큼 오프셋 이동
+            newOffset = oldOffset + (addLen - delLen);
+            // 만약 커서가 삭제 구간 안이었다면, 구간 끝으로 이동
+            if (oldOffset < data.end) {
+                newOffset = data.start + addLen;
+            }
+        }
+    }
+
+    // 4) 보정된 오프셋으로 커서 복원
+    setCaretOffset(editorElement, newOffset);
+
     isLocalChange = false;
 }
 
