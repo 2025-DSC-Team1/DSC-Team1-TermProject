@@ -234,20 +234,37 @@ function getDiff(oldStr, newStr) {
 
 function sendDiff() {
     const current = editorElement.textContent;
+    // 변경 없으면 아무 것도 안 함
+    if (current === lastContent) return;
+
     const diffMsg = getDiff(lastContent, current);
+
+    // “빈 문자열 edit” 또는 “빈 add/delete” 면 무시
+    if (
+        (diffMsg.type === 'add'    && !diffMsg.text) ||
+        (diffMsg.type === 'delete' && diffMsg.end - diffMsg.start === 0) ||
+        (diffMsg.type === 'edit'   && diffMsg.start === 0
+            && diffMsg.end === lastContent.length
+            && diffMsg.text === '')
+    ) {
+        return;
+    }
+
     socket.send(JSON.stringify(diffMsg));
     lastContent = current;
 }
 
-editorElement.addEventListener('input', () => {
+editorElement.addEventListener('input', (e) => {
     // 1) 로컬 업데이트나 소켓 비연결 시 무시
     if (isLocalChange || !socket || socket.readyState !== WebSocket.OPEN) return;
 
+    // 2) 진짜 텍스트 편집이 아닌 이벤트면 무시
+    const t = /** @type {InputEvent} */(e).inputType;
+    if (t === 'formatBlock' || t === 'historyUndo' || t === 'historyRedo') return;
+
     // 3) 디바운스 걸고 최종 Diff 전송
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-        sendDiff();
-    }, 250);
+    debounceTimer = setTimeout(sendDiff, 200);
 });
 
 // 엔터 키를 눌렀을 때 줄바꿈 처리
