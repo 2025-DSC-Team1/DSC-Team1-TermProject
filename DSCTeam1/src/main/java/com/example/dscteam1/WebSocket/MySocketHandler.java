@@ -15,6 +15,31 @@ public class MySocketHandler extends TextWebSocketHandler {
     // 공유 텍스트 내용을 저장할 변수
     private static StringBuilder sharedText = new StringBuilder();
 
+    private void broadcast(String message) {
+        for (WebSocketSession sess : sessions) {
+            try {
+                if (sess.isOpen()) {
+                    sess.sendMessage(new TextMessage(message));
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void broadcastTextChange(JSONObject change, WebSocketSession sender) {
+        for (WebSocketSession sess : sessions) {
+            if (sess.isOpen() && sess != sender) {
+                try {
+                    sess.sendMessage(new TextMessage(change.toString()));
+                } catch (IOException e) {
+                    // 전송 실패 로그
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         sessions.add(session);
@@ -29,6 +54,13 @@ public class MySocketHandler extends TextWebSocketHandler {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        sessions.remove(session);
+        broadcast("❌ A client disconnected: " + session.getId());
+        System.out.println("A client disconnected: " + session.getId());
     }
 
     @Override
@@ -95,37 +127,6 @@ public class MySocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             // JSON 형식이 아닌 일반 메시지 처리
             session.sendMessage(new TextMessage("서버 응답: " + message.getPayload()));
-        }
-    }
-
-    @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        sessions.remove(session);
-        broadcast("❌ A client disconnected: " + session.getId());
-    }
-
-    private void broadcast(String message) {
-        for (WebSocketSession sess : sessions) {
-            try {
-                if (sess.isOpen()) {
-                    sess.sendMessage(new TextMessage(message));
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void broadcastTextChange(JSONObject change, WebSocketSession sender) {
-        for (WebSocketSession sess : sessions) {
-            if (sess.isOpen() && sess != sender) {
-                try {
-                    sess.sendMessage(new TextMessage(change.toString()));
-                } catch (IOException e) {
-                    // 전송 실패 로그
-                    e.printStackTrace();
-                }
-            }
         }
     }
 }

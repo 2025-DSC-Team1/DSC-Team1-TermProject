@@ -267,42 +267,6 @@ editorElement.addEventListener('input', (e) => {
     debounceTimer = setTimeout(sendDiff, 200);
 });
 
-// 엔터 키를 눌렀을 때 줄바꿈 처리
-/*
-editorElement.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault(); // 기본 동작 방지
-
-        // 표준 방식의 줄바꿈 삽입
-        const selection = window.getSelection();
-        const range = selection.getRangeAt(0);
-        const newLineNode = document.createTextNode('\n');
-        range.deleteContents();
-        range.insertNode(newLineNode);
-
-        // 커서 위치 조정
-        range.setStartAfter(newLineNode);
-        range.setEndAfter(newLineNode);
-        selection.removeAllRanges();
-        selection.addRange(range);
-
-        // 변경 내용 서버로 전송
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            const currentContent = editorElement.textContent;
-            const editMessage = {
-                type: "edit",
-                start: 0,
-                end: lastContent.length,
-                text: currentContent
-            };
-            socket.send(JSON.stringify(editMessage));
-            lastContent = currentContent;
-        }
-    }
-});
-*/
-
-
 editorElement.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
