@@ -5,9 +5,15 @@
     <title>DSC 1팀 협업 텍스트 편집기</title>
     <link rel="stylesheet" href="style.css" />
   </head>
+
   <body>
     <h1>협업 텍스트 편집기</h1>
-
+    <div id="userIdDisplay">
+      사용자: —
+    </div>
+    <div id="userListDisplay" class="user-list">
+      연결된 사용자: —
+    </div>
     <div class="button-group">
       <button id="connect" onclick="connect()">연결</button>
       <button id="disconnect" onclick="disconnect()">연결 해제</button>
