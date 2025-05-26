@@ -3,6 +3,8 @@ let editorElement = document.getElementById("editor");
 let statusElement = document.getElementById("status");
 let isLocalChange = false;
 let lastContent = "";
+let currentUserId = null;
+let userListDisplay = document.getElementById("userListDisplay");
 
 function logMessage(message) {
     const logDiv = document.getElementById("log");
@@ -122,22 +124,33 @@ function applyPatch(data) {
 }
 
 function connect() {
+    // 이미 연결 혹은 연결 중 체크
     if (socket && socket.readyState === WebSocket.OPEN) {
         logMessage("⚠️ 이미 연결되어 있습니다.");
         return;
     }
-
     if (socket && socket.readyState === WebSocket.CONNECTING) {
         logMessage("⏳ 연결 중입니다...");
         return;
     }
 
+    // 사용자 ID 입력 받기
+    const userId = prompt("사용자 아이디를 입력하세요:");
+    if (!userId || !userId.trim()) {
+        logMessage("⚠️ 아이디를 입력하지 않으면 연결할 수 없습니다.");
+        return;
+    }
+    currentUserId = userId.trim();
+
+    // 화면에 표시
+    userIdDisplay.innerText = `사용자: ${currentUserId}`;
+
     updateStatus("connecting", "연결 중...");
     editorElement.contentEditable = "false";
 
-    // WebSocket 프로토콜 자동 선택 (http->ws, https->wss)
+    // WS URL에 user 파라미터 추가
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/ws?user=${encodeURIComponent(userId)}`;
 
     socket = new WebSocket(wsUrl);
 
@@ -154,34 +167,54 @@ function connect() {
         try {
             const data = JSON.parse(e.data);
 
-            if (data.type === "init") {
-                // 초기 텍스트 설정
-                isLocalChange = true;
-                editorElement.textContent = data.text;
-                lastContent = data.text;
-                isLocalChange = false;
-                logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
-            }
-            else if (["add","delete","edit"].includes(data.type)) {
-                applyPatch(data);
-                logMessage(`📩 패치 적용: ${data.type}`);
-            }
-            else {
-                // 일반 메시지
-                logMessage("📩 " + e.data);
+            // 메시지 타입에 따라 분기 처리
+            switch (data.type) {
+                case "init":
+                    // 초기 텍스트 설정
+                    isLocalChange = true;
+                    editorElement.textContent = data.text;
+                    lastContent = data.text;
+                    isLocalChange = false;
+                    logMessage("📩 서버에서 초기 텍스트를 받았습니다.");
+                    break;
+
+                case "add":
+                case "delete":
+                case "edit":
+                    // 패치 적용
+                    applyPatch(data);
+                    logMessage(`📩 패치 적용: ${data.type}`);
+                    break;
+
+                case "userList":
+                    // 유저 리스트 갱신
+                    updateUserList(data.users);
+                    break;
+
+                default:
+                    // 그 외 일반 메시지
+                    logMessage("📩 " + e.data);
             }
         } catch (error) {
-            // JSON이 아닌 일반 메시지 처리
+            // JSON 파싱 실패 시, 일반 텍스트 로그
             logMessage("📩 " + e.data);
         }
     };
 
-    socket.onclose = () => {
-        logMessage("❌ 연결 종료");
-        updateStatus("disconnected", "연결 안됨");
+    socket.onclose = (e) => {
+        // 중복 접속 거부 시 코드 1008
+        if (e.code === 1008) {
+            logMessage("⚠️ 이미 접속 중입니다.");
+            updateStatus("disconnected", "이미 접속 중");
+        } else {
+            logMessage("❌ 연결 종료");
+            updateStatus("disconnected", "연결 안됨");
+        }
         editorElement.contentEditable = "false";
         socket = null;
     };
+
+
 
     socket.onerror = (e) => {
         logMessage("🚨 에러 발생: " + e.message);
@@ -286,3 +319,17 @@ window.onload = function() {
     const connectButton = document.querySelector('.button-group button:first-child');
     connectButton.focus();
 };
+
+// 유저 리스트를 화면에 그려주는 함수
+function updateUserList(users) {
+    if (!users || !users.length) {
+        userListDisplay.innerText = "연결된 사용자: —";
+        return;
+    }
+    // 각 이름을 <span>으로 감싸고, ', ' 로 join
+    const listHtml = users
+        .map(u => `<span class="user-badge">${u}</span>`)
+        .join(', ');
+    userListDisplay.innerHTML = `연결된 사용자: ${listHtml}`;
+}
+
