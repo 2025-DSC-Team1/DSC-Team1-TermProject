@@ -104,12 +104,12 @@ function updateLineVisualFeedback() {
     } else {
         editorElement.style.userSelect = 'text';
         if (currentEditingLine === currentLine) {
-            editorElement.classList.add('line-editing');
-            showLineStatusMessage(`라인 ${currentLine + 1}을 편집 중입니다.`);
-        } else {
-            hideLineStatusMessage();
-        }
+        editorElement.classList.add('line-editing');
+        showLineStatusMessage(`라인 ${currentLine + 1}을 편집 중입니다.`);
+    } else {
+        hideLineStatusMessage();
     }
+}
 }
 
 /**
