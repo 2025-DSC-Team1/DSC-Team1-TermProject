@@ -137,11 +137,19 @@ function hideLineStatusMessage() {
  */
 function requestLineLock(lineNumber) {
     if (socket && socket.readyState === WebSocket.OPEN) {
+        // 이미 다른 라인을 편집 중이면 먼저 해제
+        if (currentEditingLine !== null && currentEditingLine !== lineNumber) {
+            releaseLineLock();
+        }
+
         const request = {
             type: "requestLineLock",
             line: lineNumber
         };
         socket.send(JSON.stringify(request));
+        
+        // 락 요청 상태 표시
+        showLineStatusMessage(`라인 ${lineNumber + 1} 편집 권한 요청 중...`);
     }
 }
 
@@ -155,6 +163,7 @@ function releaseLineLock() {
         };
         socket.send(JSON.stringify(request));
         currentEditingLine = null;
+        hideLineStatusMessage();
     }
 }
 
@@ -399,7 +408,7 @@ function sendDiff() {
 
     const diffMsg = getDiff(lastContent, current);
 
-    // “빈 문자열 edit” 또는 “빈 add/delete” 면 무시
+    // "빈 문자열 edit" 또는 "빈 add/delete" 면 무시
     if (
         (diffMsg.type === 'add'    && !diffMsg.text) ||
         (diffMsg.type === 'delete' && diffMsg.end - diffMsg.start === 0) ||
@@ -430,16 +439,25 @@ editorElement.addEventListener('input', (e) => {
 // 커서 이동 감지 및 라인 편집 권한 관리
 editorElement.addEventListener('click', handleLineChange);
 editorElement.addEventListener('keyup', handleLineChange);
+editorElement.addEventListener('focus', handleLineChange); // 포커스 이벤트 추가
+
 function handleLineChange() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
     const newLine = getCurrentLineNumber();
+    const owner = lineOwnership[newLine];
 
     // 새로운 라인으로 이동했을 때
     if (newLine !== currentEditingLine) {
         // 이전 라인 권한 해제
         if (currentEditingLine !== null) {
             releaseLineLock();
+        }
+
+        // 다른 사용자가 편집 중인 라인이면 경고
+        if (owner && owner !== currentUserId) {
+            showLineStatusMessage(`라인 ${newLine + 1}은 ${owner}님이 편집 중입니다. 편집할 수 없습니다.`);
+            return;
         }
 
         // 새 라인 편집 권한 요청
@@ -450,47 +468,11 @@ function handleLineChange() {
     updateLineVisualFeedback();
 }
 
-editorElement.addEventListener('keydown', (e) => {
-    // Enter 키 처리
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-
-        // 1) 브라우저 기본 줄바꿈 삽입 (<br> 한 번만!)
-        document.execCommand('insertLineBreak');
-
-        // 2) 서버에 change 알리기
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            sendDiff();
-        }
-
-        // 3) 새 라인으로 이동했으므로 권한 재요청
-        setTimeout(() => {
-            handleLineChange();
-        }, 100);
-    }
-
-    // 편집 불가능한 라인에서의 입력 방지
-    const currentLine = getCurrentLineNumber();
-    const owner = lineOwnership[currentLine];
-
-    if (owner && owner !== currentUserId) {
-        // 특정 키들은 허용 (방향키, 선택 등)
-        const allowedKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-                           'Home', 'End', 'PageUp', 'PageDown', 'Tab'];
-
-        if (!allowedKeys.includes(e.key) && !e.ctrlKey && !e.metaKey) {
-            e.preventDefault();
-            showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다. 편집할 수 없습니다.`);
-            return false;
-        }
-    }
-});
-
 // 편집기에서 포커스가 벗어날 때 라인 권한 해제
 editorElement.addEventListener('blur', () => {
     if (currentEditingLine !== null) {
+        // 포커스가 다른 곳으로 완전히 이동했는지 확인
         setTimeout(() => {
-            // 포커스가 다른 곳으로 완전히 이동했는지 확인
             if (document.activeElement !== editorElement) {
                 releaseLineLock();
                 hideLineStatusMessage();
@@ -522,5 +504,48 @@ function updateUserList(users) {
 window.addEventListener('beforeunload', () => {
     if (socket && socket.readyState === WebSocket.OPEN) {
         releaseLineLock();
+    }
+});
+
+// 키보드 이벤트 처리 개선
+editorElement.addEventListener('keydown', (e) => {
+    const currentLine = getCurrentLineNumber();
+    const owner = lineOwnership[currentLine];
+
+    // 편집 불가능한 라인에서의 입력 방지
+    if (owner && owner !== currentUserId) {
+        // 특정 키들은 허용 (방향키, 선택 등)
+        const allowedKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                           'Home', 'End', 'PageUp', 'PageDown', 'Tab'];
+
+        if (!allowedKeys.includes(e.key) && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다. 편집할 수 없습니다.`);
+            return false;
+        }
+    }
+
+    // Enter 키 처리
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+
+        // 현재 라인의 편집 권한 확인
+        if (owner && owner !== currentUserId) {
+            showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다. 줄바꿈을 할 수 없습니다.`);
+            return false;
+        }
+
+        // 1) 브라우저 기본 줄바꿈 삽입
+        document.execCommand('insertLineBreak');
+
+        // 2) 서버에 change 알리기
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            sendDiff();
+        }
+
+        // 3) 새 라인으로 이동했으므로 권한 재요청
+        setTimeout(() => {
+            handleLineChange();
+        }, 100);
     }
 });

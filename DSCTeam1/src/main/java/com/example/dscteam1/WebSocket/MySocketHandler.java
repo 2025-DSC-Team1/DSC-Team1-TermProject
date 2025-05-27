@@ -9,6 +9,9 @@ import org.json.JSONArray;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONObject;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class MySocketHandler extends TextWebSocketHandler {
 
@@ -23,6 +26,36 @@ public class MySocketHandler extends TextWebSocketHandler {
 
     // 사용자별 편집 중인 라인 추적 (클라이언트 ID -> 라인 번호)
     private static final Map<String, Integer> userEditingLine = new ConcurrentHashMap<>();
+
+    // 라인별 락 타임스탬프 (라인 번호 -> 타임스탬프)
+    private static final Map<Integer, Long> lineLockTimestamp = new ConcurrentHashMap<>();
+
+    // 락 타임아웃 (30초)
+    private static final long LOCK_TIMEOUT = 30000;
+
+    // 락 체크 주기 (5초)
+    private static final long LOCK_CHECK_INTERVAL = 5000;
+
+    // 락 체크 스케줄러
+    private static final ScheduledExecutorService lockChecker = Executors.newSingleThreadScheduledExecutor();
+
+    static {
+        // 주기적으로 락 타임아웃 체크
+        lockChecker.scheduleAtFixedRate(() -> {
+            long currentTime = System.currentTimeMillis();
+            lineLockTimestamp.forEach((line, timestamp) -> {
+                if (currentTime - timestamp > LOCK_TIMEOUT) {
+                    String owner = lineOwnership.get(line);
+                    if (owner != null) {
+                        lineOwnership.remove(line);
+                        userEditingLine.remove(owner);
+                        lineLockTimestamp.remove(line);
+                        broadcastLineOwnership();
+                    }
+                }
+            });
+        }, LOCK_CHECK_INTERVAL, LOCK_CHECK_INTERVAL, TimeUnit.MILLISECONDS);
+    }
 
     private void broadcast(String message) {
         for (WebSocketSession sess : userSessions.values()) {
@@ -48,7 +81,7 @@ public class MySocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void broadcastLineOwnership() {
+    private static void broadcastLineOwnership() {
         JSONObject msg = new JSONObject();
         msg.put("type", "lineOwnership");
 
@@ -82,7 +115,18 @@ public class MySocketHandler extends TextWebSocketHandler {
 
     private boolean canUserEditLine(String userId, int lineNumber) {
         String owner = lineOwnership.get(lineNumber);
-        return owner == null || owner.equals(userId);
+        if (owner == null) return true;
+        
+        // 락이 타임아웃되었는지 확인
+        Long timestamp = lineLockTimestamp.get(lineNumber);
+        if (timestamp != null && System.currentTimeMillis() - timestamp > LOCK_TIMEOUT) {
+            lineOwnership.remove(lineNumber);
+            userEditingLine.remove(owner);
+            lineLockTimestamp.remove(lineNumber);
+            return true;
+        }
+        
+        return owner.equals(userId);
     }
 
     private void acquireLineLock(String userId, int lineNumber) {
@@ -90,11 +134,13 @@ public class MySocketHandler extends TextWebSocketHandler {
         Integer previousLine = userEditingLine.get(userId);
         if (previousLine != null && !previousLine.equals(lineNumber)) {
             lineOwnership.remove(previousLine);
+            lineLockTimestamp.remove(previousLine);
         }
 
         // 새 라인 점유
         lineOwnership.put(lineNumber, userId);
         userEditingLine.put(userId, lineNumber);
+        lineLockTimestamp.put(lineNumber, System.currentTimeMillis());
         broadcastLineOwnership();
     }
 
@@ -103,6 +149,7 @@ public class MySocketHandler extends TextWebSocketHandler {
         if (editingLine != null) {
             lineOwnership.remove(editingLine);
             userEditingLine.remove(userId);
+            lineLockTimestamp.remove(editingLine);
             broadcastLineOwnership();
         }
     }
