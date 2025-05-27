@@ -99,11 +99,16 @@ function updateLineVisualFeedback() {
     if (owner && owner !== currentUserId) {
         editorElement.classList.add('line-locked');
         showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다.`);
-    } else if (currentEditingLine === currentLine) {
-        editorElement.classList.add('line-editing');
-        showLineStatusMessage(`라인 ${currentLine + 1}을 편집 중입니다.`);
+        // 잠긴 라인에서는 선택 불가능하도록 설정
+        editorElement.style.userSelect = 'none';
     } else {
-        hideLineStatusMessage();
+        editorElement.style.userSelect = 'text';
+        if (currentEditingLine === currentLine) {
+            editorElement.classList.add('line-editing');
+            showLineStatusMessage(`라인 ${currentLine + 1}을 편집 중입니다.`);
+        } else {
+            hideLineStatusMessage();
+        }
     }
 }
 
@@ -558,5 +563,18 @@ editorElement.addEventListener('keydown', (e) => {
         setTimeout(() => {
             handleLineChange();
         }, 100);
+    }
+});
+
+// 마우스 이벤트 처리 추가
+editorElement.addEventListener('mousedown', (e) => {
+    const currentLine = getCurrentLineNumber();
+    const owner = lineOwnership[currentLine];
+
+    // 편집 불가능한 라인에서의 선택 방지
+    if (owner && owner !== currentUserId) {
+        e.preventDefault();
+        showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다. 선택할 수 없습니다.`);
+        return false;
     }
 });
