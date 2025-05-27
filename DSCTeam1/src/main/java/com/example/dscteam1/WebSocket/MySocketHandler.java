@@ -147,6 +147,7 @@ public class MySocketHandler extends TextWebSocketHandler {
     private void releaseLineLock(String userId) {
         Integer editingLine = userEditingLine.get(userId);
         if (editingLine != null) {
+            // 현재 라인의 락만 해제
             lineOwnership.remove(editingLine);
             userEditingLine.remove(userId);
             lineLockTimestamp.remove(editingLine);
@@ -250,7 +251,7 @@ public class MySocketHandler extends TextWebSocketHandler {
                     int addPosition = jsonMessage.getInt("position");
                     String textToAdd = jsonMessage.getString("text");
 
-                    // 편집 권한 확인
+                    // 편집 권한 확인 (현재 라인만 확인)
                     int affectedLine = getLineFromPosition(addPosition);
                     if (!canUserEditLine(userId, affectedLine)) {
                         JSONObject errorResponse = new JSONObject();
@@ -264,7 +265,6 @@ public class MySocketHandler extends TextWebSocketHandler {
                     // 공유 텍스트에 추가
                     if (addPosition >= 0 && addPosition <= sharedText.length()) {
                         sharedText.insert(addPosition, textToAdd);
-//                        broadcastTextChange(jsonMessage);
                         broadcastTextChange(jsonMessage, session);
                     }
                     break;
@@ -291,7 +291,6 @@ public class MySocketHandler extends TextWebSocketHandler {
                     // 공유 텍스트에서 삭제
                     if (startPos >= 0 && endPos <= sharedText.length() && startPos <= endPos) {
                         sharedText.delete(startPos, endPos);
-//                        broadcastTextChange(jsonMessage);
                         broadcastTextChange(jsonMessage, session);
                     }
                     break;
@@ -319,7 +318,6 @@ public class MySocketHandler extends TextWebSocketHandler {
                     // 공유 텍스트에서 편집
                     if (editStartPos >= 0 && editEndPos <= sharedText.length() && editStartPos <= editEndPos) {
                         sharedText.replace(editStartPos, editEndPos, newText);
-//                        broadcastTextChange(jsonMessage);
                         broadcastTextChange(jsonMessage, session);
                     }
                     break;

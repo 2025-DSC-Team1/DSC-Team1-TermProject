@@ -419,6 +419,17 @@ function sendDiff() {
         return;
     }
 
+    // 현재 라인의 편집 권한 확인
+    const currentLine = getCurrentLineNumber();
+    const owner = lineOwnership[currentLine];
+    
+    if (owner && owner !== currentUserId) {
+        // 편집 권한이 없으면 변경사항 무시하고 원래 내용으로 복원
+        editorElement.textContent = lastContent;
+        showLineStatusMessage(`라인 ${currentLine + 1}은 ${owner}님이 편집 중입니다. 편집할 수 없습니다.`);
+        return;
+    }
+
     socket.send(JSON.stringify(diffMsg));
     lastContent = current;
 }
