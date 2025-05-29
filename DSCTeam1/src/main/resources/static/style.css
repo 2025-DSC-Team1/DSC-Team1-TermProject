@@ -28,6 +28,36 @@ h1 {
   line-height: 1.5;
   margin-bottom: 20px;
 }
+
+/* 라인 편집 중일 때 스타일 */
+#editor.line-editing {
+  border-color: #4caf50;
+  background-color: #f0fff0;
+}
+/* 라인이 잠겨있을 때 스타일 */
+#editor.line-locked {
+  border-color: #ff6b6b;
+  background-color: #fff5f5;
+}
+/* 라인 상태 메시지 */
+.line-status {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  font-size: 14px;
+  z-index: 1000;
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .button-group {
   margin: 10px 0;
   display: inline-block;
@@ -107,4 +137,18 @@ button {
   font-weight: bold;
 }
 
+/* 사용자 배지 스타일 */
+.user-badge {
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-right: 5px;
+  display: inline-block;
+}
 
+/* 편집 불가능한 상태 커서 */
+#editor.line-locked {
+  cursor: not-allowed;
+}
