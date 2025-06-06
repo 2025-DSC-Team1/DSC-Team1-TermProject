@@ -12,6 +12,14 @@ import org.json.JSONObject;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.Path;
+import java.io.File;
+import java.util.stream.Collectors;
+import java.util.List;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 
 public class MySocketHandler extends TextWebSocketHandler {
 
@@ -377,5 +385,79 @@ public class MySocketHandler extends TextWebSocketHandler {
                 }
             }
         }
+    }
+
+    // 1) 프로젝트 루트/실행 위치 기준으로 “saved_files” 폴더 경로 지정
+    private static final String SAVE_DIR = "saved_files";
+
+    static {
+        // 애플리케이션 시작 시 saved_files 폴더가 없으면 만든다
+        File dir = new File(SAVE_DIR);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+    }
+
+
+    // sharedText 내용을 "saved_files/<fileName>" 으로 저장
+    // @param fileName: 예) "memo1.txt" 또는 "collab.txt" (디렉토리 없이 파일명만)
+    public static synchronized void saveToFile(String fileName) throws IOException {
+        // 1) 파일명을 검증 (예: .. 경로 삽입 방지) - 간단히 “/” 문자가 있으면 예외 처리
+        if (fileName.contains("/") || fileName.contains("\\") ) {
+            throw new IOException("잘못된 파일명입니다: " + fileName);
+        }
+
+        // 2) Paths.get(SAVE_DIR, fileName) 으로 경로 구성
+        Path filePath = Paths.get(SAVE_DIR, fileName);
+        Files.write(filePath, sharedText.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    // "saved_files/<fileName>" 을 읽어서 sharedText에 덮어쓰기
+    // 이후, 기존 init 브로드캐스트 로직 그대로 쓰면 클라이언트가 전체 텍스트를 받아서 갱신함
+    public static synchronized void loadFromFile(String fileName) throws IOException {
+        if (fileName.contains("/") || fileName.contains("\\") ) {
+            throw new IOException("잘못된 파일명입니다: " + fileName);
+        }
+
+        Path filePath = Paths.get(SAVE_DIR, fileName);
+        if (!Files.exists(filePath)) {
+            throw new IOException("해당 파일이 존재하지 않습니다: " + fileName);
+        }
+
+        // 1) 파일 내용 읽어서 sharedText에 덮어쓰기
+        byte[] allBytes = Files.readAllBytes(filePath);
+        String fileContent = new String(allBytes, StandardCharsets.UTF_8);
+
+        sharedText.setLength(0);
+        sharedText.append(fileContent);
+
+        // 2) 전체 클라이언트에게 init 메시지 전송 (이전과 동일)
+        JSONObject init = new JSONObject();
+        init.put("type", "init");
+        init.put("text", sharedText.toString());
+        String initMsg = init.toString();
+
+        for (WebSocketSession sess : userSessions.values()) {
+            if (sess.isOpen()) {
+                try {
+                    sess.sendMessage(new TextMessage(initMsg));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        broadcastLineOwnership();
+    }
+
+    // saved_files 디렉토리 안의 *.txt 목록을 String 리스트로 반환하는 메서드
+    // @return 예: ["memo1.txt", "collab.txt", …]
+    public static synchronized List<String> listSavedFiles() throws IOException {
+        File dir = new File(SAVE_DIR);
+        // 디렉토리 내 모든 파일 중, 파일명만 스트링 리스트로 변환
+        return Files.list(dir.toPath())
+                .filter(Files::isRegularFile)
+                .map(Path::getFileName)
+                .map(Path::toString)
+                .collect(Collectors.toList());
     }
 }

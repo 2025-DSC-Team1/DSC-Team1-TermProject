@@ -272,6 +272,10 @@ function connect() {
         updateStatus("connected", "연결됨");
         editorElement.contentEditable = "true";
 
+        // 연결되면 저장/불러오기 버튼 활성화
+        document.getElementById("saveFile").disabled = false;
+        document.getElementById("loadFile").disabled = false;
+
         // 서버에 초기 동기화 요청
         requestSyncFromServer();
     };
@@ -354,6 +358,10 @@ function connect() {
         currentEditingLine = null;
         lineOwnership = {};
         hideLineStatusMessage();
+
+        // 연결이 끊어지면 저장/불러오기 버튼 다시 비활성화
+        document.getElementById("saveFile").disabled = true;
+        document.getElementById("loadFile").disabled = true;
     };
 
     socket.onerror = (e) => {
@@ -578,3 +586,123 @@ editorElement.addEventListener('mousedown', (e) => {
         return false;
     }
 });
+
+/**
+ * “서버에서 불러오기” 버튼 클릭 시 호출.
+ * 1) GET /listFiles 호출 ⇒ JSON 배열로 파일명 목록을 받는다.
+ * 2) <select id="fileDropdown"> 의 옵션을 해당 목록으로 채운다.
+ * 3) #fileSelection 컨테이너 display:block 으로 변경해 보여주기.
+ */
+function showLoadList() {
+  // 1) WebSocket 연결 상태 점검
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    alert("❌ 서버에 연결되어 있지 않습니다. 먼저 ‘연결’ 버튼을 눌러주세요.");
+    return;
+  }
+  fetch('/listFiles')
+    .then(response => response.json())
+    .then(fileArray => {
+      const dropdown = document.getElementById('fileDropdown');
+      // 기존 옵션 모두 제거
+      dropdown.innerHTML = '';
+
+      if (fileArray.length === 0) {
+        // 파일이 하나도 없으면, “선택할 수 있는 파일이 없습니다” 한 줄 추가
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '불러올 파일이 없습니다';
+        dropdown.appendChild(opt);
+        dropdown.disabled = true;
+      } else {
+        dropdown.disabled = false;
+        // JSON 배열 안의 파일명들로 <option> 생성
+        fileArray.forEach(fileName => {
+          const opt = document.createElement('option');
+          opt.value = fileName;      // 실제 서버에 요청 보낼 때 사용하는 값
+          opt.textContent = fileName; // 화면에 보여줄 텍스트
+          dropdown.appendChild(opt);
+        });
+      }
+
+      // 파일 선택 UI 보이기
+      document.getElementById('fileSelection').style.display = 'block';
+    })
+    .catch(err => {
+      console.error('파일 목록을 가져오는 중 오류:', err);
+      alert('서버에서 파일 목록을 불러오는 데 실패했습니다.');
+    });
+}
+
+/**
+ * “불러오기 확정” 버튼 클릭 시 호출.
+ * 1) <select id="fileDropdown"> 에서 선택된 파일명 가져오기
+ * 2) fetch('/load?fileName=선택된파일명', { method: 'POST' }) 호출
+ * 3) 응답이 OK면 “불러오기 성공” 알림, 실패면 에러 알림.
+ * 4) 파일 선택 UI 숨기기
+ */
+function confirmLoad() {
+  const dropdown = document.getElementById('fileDropdown');
+  const selectedFile = dropdown.value;
+  if (!selectedFile) {
+    alert('불러올 파일을 선택해 주세요.');
+    return;
+  }
+
+  fetch(`/load?fileName=${encodeURIComponent(selectedFile)}`, {
+    method: 'POST'
+  })
+    .then(response => response.text())
+    .then(text => {
+      if (text.startsWith('OK')) {
+        alert(`"${selectedFile}" 파일을 불러왔습니다.`);
+      } else {
+        alert('불러오기 실패: ' + text);
+      }
+      hideLoadList();
+    })
+    .catch(err => {
+      console.error('파일 불러오기 중 오류:', err);
+      alert('파일 불러오기 중 네트워크 오류가 발생했습니다.');
+      hideLoadList();
+    });
+}
+
+/** 파일 선택 UI(#fileSelection) 숨기기 */
+function hideLoadList() {
+  document.getElementById('fileSelection').style.display = 'none';
+}
+
+/**
+ * 저장하기 로직 → 여기서는 기존 saveToServer()를 “파일명만 입력받는” 형태로 바꿀 수도 있고,
+ * 별도 드롭다운을 만들어도 되지만, 우선은 prompt로 간단히 파일명 입력 받도록 둡니다.
+ * 필요하면 저장도 “파일 목록을 보여주고 선택”하게 유사하게 구현할 수 있습니다.
+ */
+function saveToServer() {
+   // 1) WebSocket 연결 상태 점검
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    alert("❌ 서버에 연결되어 있지 않습니다. 먼저 ‘연결’ 버튼을 눌러주세요.");
+    return;
+  }
+
+  let fileName = prompt("저장할 파일명을 입력하세요 (예: memo1.txt):");
+  if (!fileName) {
+    alert("파일명이 입력되지 않았습니다.");
+    return;
+  }
+
+  fetch(`/save?fileName=${encodeURIComponent(fileName)}`, {
+    method: "POST"
+  })
+    .then(response => response.text())
+    .then(text => {
+      if (text.startsWith("OK")) {
+        alert(`서버에 저장되었습니다: "${fileName}"`);
+      } else {
+        alert("저장 실패: " + text);
+      }
+    })
+    .catch(err => {
+      alert("저장 중 네트워크 오류가 발생했습니다.");
+      console.error(err);
+    });
+}
