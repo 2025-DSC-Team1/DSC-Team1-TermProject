@@ -4,8 +4,8 @@ let statusElement = document.getElementById("status");
 let isLocalChange = false;
 let lastContent = "";
 let currentUserId = null;
+let userIdDisplay   = document.getElementById("userIdDisplay");
 let userListDisplay = document.getElementById("userListDisplay");
-
 let lineOwnership = {}; // 라인별 소유권 정보
 let currentEditingLine = null; // 현재 편집 중인 라인
 let lineElements = []; // 라인별 DOM 요소 참조
