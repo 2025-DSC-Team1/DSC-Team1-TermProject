@@ -4,18 +4,33 @@
     <meta charset="UTF-8" />
     <title>DSC 1팀 협업 텍스트 편집기</title>
 
+    <!-- 0) 전역 에러 리스너로 중복 정의 에러 무시 -->
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message &&
+                e.message.includes("A custom element with name 'mce-autosize-textarea'")) {
+          console.warn("⚠️ 중복 정의 에러 무시:", e.message);
+          e.preventDefault();      // 브라우저 기본 에러 처리 차단
+          return false;            // 이벤트 전파 중단
+        }
+        // 그 외 에러는 그대로
+      });
+    </script>
+
+    <!-- 1) customElements.define guard (기존에 삽입했던 코드) -->
     <script>
       (function() {
         const originalDefine = customElements.define;
-        customElements.define = function(name, constructor, options) {
+        customElements.define = function(name, ctor, options) {
           if (customElements.get(name)) {
             console.warn(`⚠️ 커스텀 엘리먼트 '${name}' 이미 정의되어 스킵함`);
             return;
           }
-          return originalDefine.call(this, name, constructor, options);
+          return originalDefine.call(this, name, ctor, options);
         };
       })();
     </script>
+
     <link rel="stylesheet" href="style.css" />
   </head>
 
