@@ -396,6 +396,14 @@ function disconnect() {
     } else {
         logMessage("⚠️ 연결이 이미 닫혀있습니다.");
     }
+
+    // 사용자 이름·리스트 초기화
+    userIdDisplay.innerText   = "사용자: —";
+    userListDisplay.innerText = "연결된 사용자: —";
+
+    // 버튼도 비활성
+    document.getElementById("saveFile").setAttribute("disabled", "");
+    document.getElementById("loadFile").setAttribute("disabled", "");
 }
 
 function requestSyncFromServer() {
