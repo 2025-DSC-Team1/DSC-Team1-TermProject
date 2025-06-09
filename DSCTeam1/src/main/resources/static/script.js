@@ -273,8 +273,16 @@ function connect() {
         editorElement.contentEditable = "true";
 
         // 연결되면 저장/불러오기 버튼 활성화
-        document.getElementById("saveFile").disabled = false;
-        document.getElementById("loadFile").disabled = false;
+        const saveBtn = document.getElementById("saveFile");
+        const loadBtn = document.getElementById("loadFile");
+
+        console.log("before:", saveBtn.disabled, loadBtn.disabled);
+
+        // disabled 속성 자체를 제거
+        saveBtn.removeAttribute("disabled");
+        loadBtn.removeAttribute("disabled");
+
+        console.log("after:", saveBtn.disabled, loadBtn.disabled);
 
         // 서버에 초기 동기화 요청
         requestSyncFromServer();
@@ -360,13 +368,24 @@ function connect() {
         hideLineStatusMessage();
 
         // 연결이 끊어지면 저장/불러오기 버튼 다시 비활성화
-        document.getElementById("saveFile").disabled = true;
-        document.getElementById("loadFile").disabled = true;
+        const saveBtn = document.getElementById("saveFile");
+        const loadBtn = document.getElementById("loadFile");
+
+        // disabled 속성 완전 추가
+        saveBtn.setAttribute("disabled", "");
+        loadBtn.setAttribute("disabled", "");
     };
 
     socket.onerror = (e) => {
         logMessage("🚨 에러 발생: " + e.message);
         updateStatus("disconnected", "오류 발생");
+
+        const saveBtn = document.getElementById("saveFile");
+        const loadBtn = document.getElementById("loadFile");
+
+        // disabled 속성 완전 추가
+        saveBtn.setAttribute("disabled", "");
+        loadBtn.setAttribute("disabled", "");
     };
 }
 
