@@ -3,6 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <title>DSC 1팀 협업 텍스트 편집기</title>
+
+    <script>
+      (function() {
+        const originalDefine = customElements.define;
+        customElements.define = function(name, constructor, options) {
+          if (customElements.get(name)) {
+            console.warn(`⚠️ 커스텀 엘리먼트 '${name}' 이미 정의되어 스킵함`);
+            return;
+          }
+          return originalDefine.call(this, name, constructor, options);
+        };
+      })();
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
 
