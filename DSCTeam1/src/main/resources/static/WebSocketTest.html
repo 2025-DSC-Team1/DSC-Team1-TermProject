@@ -17,7 +17,18 @@
     <div class="button-group">
       <button id="connect" onclick="connect()">연결</button>
       <button id="disconnect" onclick="disconnect()">연결 해제</button>
+      <button id="saveFile" onclick="saveToServer()" disabled>서버에 저장</button>
+      <button id="loadFile" onclick="showLoadList()" disabled>서버에서 불러오기</button>
     </div>
+    <div id="fileSelection" style="display: none; margin-top: 10px;">
+      <label for="fileDropdown">불러올 파일 선택:</label>
+      <select id="fileDropdown">
+        <!-- JS에서 <option> 요소들을 동적으로 추가할 예정 -->
+      </select>
+      <button id="confirmLoad" onclick="confirmLoad()">불러오기</button>
+      <button onclick="hideLoadList()">취소</button>
+    </div>
+
     <div id="introduce">2025 DSC 1팀</div>
 
     <div id="status" class="disconnected">연결 상태: 연결 안됨</div>
