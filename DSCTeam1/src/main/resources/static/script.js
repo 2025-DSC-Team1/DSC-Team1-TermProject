@@ -558,6 +558,14 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
+let isComposing = false;
+editorElement.addEventListener('compositionstart', () => {
+    isComposing = true;
+});
+editorElement.addEventListener('compositionend', () => {
+    isComposing = false;
+});
+
 // 키보드 이벤트 처리 개선
 editorElement.addEventListener('keydown', (e) => {
     const currentLine = getCurrentLineNumber();
@@ -577,7 +585,7 @@ editorElement.addEventListener('keydown', (e) => {
     }
 
     // Enter 키 처리
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
         e.preventDefault();
 
         // 현재 라인의 편집 권한 확인
